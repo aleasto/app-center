@@ -3,6 +3,7 @@
 #include <flutter_linux/flutter_linux.h>
 #include <handy.h>
 
+#include "packagekit_session_installer.h"
 #include "flutter/generated_plugin_registrant.h"
 
 #ifdef NDEBUG
@@ -15,6 +16,7 @@
 struct _MyApplication {
   GtkApplication parent_instance;
   char** dart_entrypoint_arguments;
+  PackageKitSessionInstaller *pk_session_installer;
 };
 
 G_DEFINE_TYPE(MyApplication, my_application, GTK_TYPE_APPLICATION)
@@ -90,15 +92,56 @@ static gint my_application_command_line(GApplication* application,
 }
 #endif
 
+// Implements GApplication::dbus_register.
+static gboolean my_application_dbus_register(GApplication* application,
+                                             GDBusConnection* connection,
+                                             const gchar* object_path,
+                                             GError** error) {
+  MyApplication *self = MY_APPLICATION(application);
+  GApplicationClass *parent_class =
+      G_APPLICATION_CLASS(my_application_parent_class);
+  g_autoptr(GError) local_error = NULL;
+
+  if (!parent_class->dbus_register(application,
+                                   connection,
+                                   object_path,
+                                   error))
+    return FALSE;
+
+  if (!package_kit_session_installer_dbus_register(self->pk_session_installer,
+                                                   connection,
+                                                   &local_error))
+    g_warning ("Failed to register PackageKit session installer: %s", local_error->message);
+
+  return TRUE;
+}
+
+// Implements GApplication::dbus_unregister.
+static void my_application_dbus_unregister(GApplication* application,
+                                           GDBusConnection* connection,
+                                           const gchar* object_path) {
+  MyApplication *self = MY_APPLICATION(application);
+  GApplicationClass *parent_class =
+      G_APPLICATION_CLASS(my_application_parent_class);
+
+  package_kit_session_installer_dbus_unregister(self->pk_session_installer,
+                                                connection);
+
+  parent_class->dbus_unregister(application, connection, object_path);
+}
+
 // Implements GObject::dispose.
 static void my_application_dispose(GObject* object) {
   MyApplication* self = MY_APPLICATION(object);
   g_clear_pointer(&self->dart_entrypoint_arguments, g_strfreev);
+  g_clear_object(&self->pk_session_installer);
   G_OBJECT_CLASS(my_application_parent_class)->dispose(object);
 }
 
 static void my_application_class_init(MyApplicationClass* klass) {
   G_APPLICATION_CLASS(klass)->activate = my_application_activate;
+  G_APPLICATION_CLASS(klass)->dbus_register = my_application_dbus_register;
+  G_APPLICATION_CLASS(klass)->dbus_unregister = my_application_dbus_unregister;
 #ifdef NDEBUG
   G_APPLICATION_CLASS(klass)->command_line = my_application_command_line;
 #else
@@ -108,7 +151,10 @@ static void my_application_class_init(MyApplicationClass* klass) {
   G_OBJECT_CLASS(klass)->dispose = my_application_dispose;
 }
 
-static void my_application_init(MyApplication* self) {}
+static void my_application_init(MyApplication* self) {
+  GApplication *app = G_APPLICATION (self);
+  self->pk_session_installer = package_kit_session_installer_new (app);
+}
 
 MyApplication* my_application_new() {
   return MY_APPLICATION(g_object_new(my_application_get_type(),

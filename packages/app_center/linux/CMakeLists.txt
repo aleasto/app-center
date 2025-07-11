@@ -1,6 +1,6 @@
 # Project-level configuration.
 cmake_minimum_required(VERSION 3.10)
-project(runner LANGUAGES CXX)
+project(runner LANGUAGES CXX C)
 
 # The name of the executable created for the application. Change this to change
 # the on-disk name of your application.
@@ -59,6 +59,15 @@ pkg_check_modules(GTK REQUIRED IMPORTED_TARGET gtk+-3.0)
 
 add_definitions(-DAPPLICATION_ID="${APPLICATION_ID}")
 
+set(GDBUS_GENERATED_SRCS)
+include("cmake/GdbusCodegen.cmake")
+add_gdbus_codegen(
+  GDBUS_GENERATED_SRCS
+  "pk-modify2"
+  "org.freedesktop."
+  "${CMAKE_SOURCE_DIR}/org.freedesktop.PackageKit.Modify2.xml"
+  )
+
 # Define the application target. To change its name, change BINARY_NAME above,
 # not the value here, or `flutter run` will no longer work.
 #
@@ -66,8 +75,11 @@ add_definitions(-DAPPLICATION_ID="${APPLICATION_ID}")
 add_executable(${BINARY_NAME}
   "main.cc"
   "my_application.cc"
+  "packagekit_session_installer.cc"
+  ${GDBUS_GENERATED_SRCS}
   "${FLUTTER_MANAGED_DIR}/generated_plugin_registrant.cc"
 )
+target_include_directories(${BINARY_NAME} PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 # Apply the standard set of build settings. This can be removed for applications
 # that need different build settings.

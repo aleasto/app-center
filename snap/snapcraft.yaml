@@ -67,6 +67,9 @@ apps:
       # temporary fix for https://github.com/canonical/snapcraft-desktop-integration/pull/35
       GIO_LAUNCH_DESKTOP: "$SNAP_DESKTOP_RUNTIME/usr/libexec/gio-launch-desktop"
     desktop: bin/data/flutter_assets/assets/app-center.desktop
+    daemon: dbus
+    daemon-scope: user
+    activates-on: [packagekit-session]
     extensions: [gnome]
     plugs: &store_plugs
       - appstream-metadata
@@ -83,15 +86,6 @@ apps:
   show-updates:
     command: bin/snap-store --updates
     desktop: bin/data/flutter_assets/assets/app-center-updates.desktop
-    environment: *store_env
-    extensions: [gnome]
-    plugs: *store_plugs
-
-  packagekit-session:
-    command: bin/app-center-packagekit
-    daemon: dbus
-    daemon-scope: user
-    activates-on: [packagekit-session]
     environment: *store_env
     extensions: [gnome]
     plugs: *store_plugs
